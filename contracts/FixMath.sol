@@ -54,4 +54,29 @@ contract FixMath {
       }
     }
   }
+
+  function toUint(string memory str) external view returns (uint256) {
+    assembly {
+      let result := callvalue()
+      let value := mload(add(str, 0x20))
+
+      value := shr(mul(0x08, sub(0x20, mload(str))), value)
+
+      for {
+        let i := callvalue()
+      } gt(value, callvalue()) {
+        i := add(i, 0x01)
+      } {
+        if eq(and(value, 0xff), 0x2e) {
+          value := shr(0x08, value)
+        }
+
+        result := add(result, mul(exp(0x0a, i), sub(and(value, 0xff), 0x30)))
+        value := shr(0x08, value)
+      }
+
+      mstore(callvalue(), result)
+      return(callvalue(), 0x20)
+    }
+  }
 }

@@ -20,6 +20,8 @@ describe("", () => {
   });
 
   it("Point", async () => {
-    console.log(await fixMath.toBytes(BigNumber.from("200001")));
+    console.log(await fixMath.toBytes(BigNumber.from("42")));
+
+    console.log(await fixMath.toUint("3.3393"));
   });
 });
