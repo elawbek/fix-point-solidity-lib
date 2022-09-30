@@ -1,0 +1,14 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "compiler-version": ["warn", "^0.8.0"],
+    "func-visibility": ["warn", { "ignoreConstructors": true }],
+    "modifier-name-mixedcase": "warn",
+    "private-vars-leading-underscore": ["warn", { "strict": false }],
+    "not-rely-on-time": "off",
+    "no-inline-assembly": "off",
+    "no-empty-blocks": "off",
+    "avoid-low-level-calls": "off",
+    "reason-string": "off"
+  }
+}
