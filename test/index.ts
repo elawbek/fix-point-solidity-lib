@@ -1,22 +1,25 @@
 import { ethers } from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { BigNumber } from "ethers";
 
-import snapshotGasCost from "./snapshots";
-
-import {} from "../typechain-types";
+import { FixMath, FixMath__factory } from "../typechain-types";
 
 async function deployFixture() {
-  const [owner, alice] = await ethers.getSigners();
+  const [owner] = await ethers.getSigners();
 
-  return { owner, alice };
+  const fixMath = await new FixMath__factory(owner).deploy();
+
+  return { owner, fixMath };
 }
 
 describe("", () => {
-  let owner: SignerWithAddress;
-  let alice: SignerWithAddress;
+  let fixMath: FixMath;
 
   beforeEach(async () => {
-    ({ owner, alice } = await loadFixture(deployFixture));
+    ({ fixMath } = await loadFixture(deployFixture));
+  });
+
+  it("Point", async () => {
+    console.log(await fixMath.toBytes(BigNumber.from("200001")));
   });
 });
