@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 contract FixMath {
+  // how many digits to the right before the point
   uint256 public point;
 
   constructor(uint256 _point) {
@@ -38,6 +39,12 @@ contract FixMath {
       }
 
       let _point := sload(point.slot)
+
+      if gt(_point, sub(len, 0x01)) {
+        len := add(len, 0x02)
+        mstore8(ptr, 0x30)
+        mstore8(add(ptr, 0x01), 0x2e)
+      }
 
       for {
         let lenLoop := len

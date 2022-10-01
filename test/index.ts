@@ -7,7 +7,7 @@ import { FixMath, FixMath__factory } from "../typechain-types";
 async function deployFixture() {
   const [owner] = await ethers.getSigners();
 
-  const fixMath = await new FixMath__factory(owner).deploy(3);
+  const fixMath = await new FixMath__factory(owner).deploy(16);
 
   return { owner, fixMath };
 }
@@ -20,10 +20,10 @@ describe("", () => {
   });
 
   it("Point", async () => {
-    console.log(await fixMath.toStr(BigNumber.from("4223432")));
+    // console.log(await fixMath.toStr(BigNumber.from("422343200000000000000")));
 
-    console.log(await fixMath.toUint("42234.320"));
+    // console.log(await fixMath.toUint("42234.320"));
 
-    console.log(await fixMath.fixAdd("42234.320", "0.123"));
+    console.log(await fixMath.fixAdd("0.3", "0.6"));
   });
 });
