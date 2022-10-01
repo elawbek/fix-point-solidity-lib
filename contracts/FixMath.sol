@@ -13,22 +13,24 @@ contract FixMath {
     view
     returns (string memory)
   {
-    // uint256 _a = toUint(a);
-    // uint256 _b = toUint(b);
-
     return toStr(toUint(a) + toUint(b));
   }
 
-  function toStr(uint256 convertValue) public view returns (string memory) {
+  function toStr(uint256 convertValue)
+    public
+    view
+    returns (string memory result)
+  {
+    result = new string(32);
+
     assembly {
-      let ptr := mload(0x40)
-      mstore(ptr, 0x20)
-      ptr := add(ptr, 0x40)
+      // result string
+      let ptr := sub(mload(0x40), 0x20)
 
+      // length of value
       let len := callvalue()
-      let value := convertValue
       for {
-
+        let value := convertValue
       } gt(value, callvalue()) {
         value := div(value, 0x0a)
       } {
@@ -42,6 +44,7 @@ contract FixMath {
       } gt(convertValue, callvalue()) {
         lenLoop := sub(lenLoop, 0x01)
       } {
+        // if the maximum fractional part of the contract has reached -> point
         if eq(sub(len, lenLoop), _point) {
           mstore8(add(ptr, lenLoop), 0x2e)
           lenLoop := sub(lenLoop, 0x01)
@@ -52,37 +55,76 @@ contract FixMath {
       }
 
       len := add(len, 0x01)
-      ptr := add(ptr, len)
 
-      let oldPtr := mload(0x40)
-      mstore(add(oldPtr, 0x20), len)
-
-      return(oldPtr, 0x60)
+      mstore(result, len)
     }
   }
 
   function toUint(string memory str) public view returns (uint256 result) {
     assembly {
-      // let result := callvalue()
-      let value := mload(add(str, 0x20))
-
-      value := shr(mul(0x08, sub(0x20, mload(str))), value)
+      // 0xvalue000000...00 -> 0x0000...00value
+      let value := shr(mul(0x08, sub(0x20, mload(str))), mload(add(str, 0x20)))
+      // counter if the fractional part of the value is less than or greater than the maximum fractional part of the contract
+      let counter := callvalue()
+      // flag if the fractional part (point) exists
+      let pointExist := callvalue()
 
       for {
-        let i := callvalue()
+        let valueLoop := value
+      } gt(valueLoop, callvalue()) {
+        valueLoop := shr(0x08, valueLoop)
+      } {
+        if eq(and(valueLoop, 0xff), 0x2e) {
+          valueLoop := callvalue()
+          pointExist := add(pointExist, 0x01)
+          counter := sub(counter, 0x01)
+        }
+        counter := add(counter, 0x01)
+      }
+
+      let _point := sload(point.slot)
+
+      // if the fractional part (point) non-exists -> counter = 0x00
+      if eq(pointExist, callvalue()) {
+        counter := callvalue()
+      }
+
+      // if the counter greater than the max fract part -> value >> (counter - point)
+      if gt(counter, _point) {
+        for {
+          let i := sub(counter, _point)
+        } gt(i, callvalue()) {
+          i := sub(i, 0x01)
+        } {
+          value := shr(0x08, value)
+        }
+      }
+
+      // if the counter less than the max fract part -> (value << (point - counter)) | 0x30 (ascii 0)
+      if gt(_point, counter) {
+        for {
+          let i := sub(_point, counter)
+        } gt(i, callvalue()) {
+          i := sub(i, 0x01)
+        } {
+          value := shl(0x08, value)
+          value := or(value, 0x30)
+        }
+      }
+
+      // result is the sum of all tenths of a number
+      for {
+        let i := 0x01
       } gt(value, callvalue()) {
-        i := add(i, 0x01)
+        i := mul(i, 0x0a)
       } {
         if eq(and(value, 0xff), 0x2e) {
           value := shr(0x08, value)
         }
 
-        result := add(result, mul(exp(0x0a, i), sub(and(value, 0xff), 0x30)))
+        result := add(result, mul(i, sub(and(value, 0xff), 0x30)))
         value := shr(0x08, value)
       }
-
-      // mstore(callvalue(), result)
-      // return(callvalue(), 0x20)
     }
   }
 }
