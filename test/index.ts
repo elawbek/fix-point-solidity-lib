@@ -20,11 +20,14 @@ describe("", () => {
   });
 
   it("Point", async () => {
-    // console.log(await fixMath.toUint("42234.320"));
+    console.log(
+      await fixMath.toStr(
+        BigNumber.from("40000000000000000000000000000000000000")
+      )
+    );
 
-    // console.log(await fixMath.fixAdd("0.3", "0.6"));
+    console.log(await fixMath.toUint("1.1"));
 
-    console.log(await fixMath.toStr(BigNumber.from("4")));
+    console.log(await fixMath.fixAdd("0.3", "0.6"));
   });
 });
-// 0.00000000000000000000000000000000000004
