@@ -2,13 +2,6 @@
 pragma solidity ^0.8.17;
 
 contract FixMath {
-  // how many digits to the right before the point
-  uint256 public point;
-
-  constructor(uint256 _point) {
-    point = _point;
-  }
-
   function fixAdd(string calldata a, string calldata b)
     external
     view
@@ -22,13 +15,10 @@ contract FixMath {
     view
     returns (string memory result)
   {
-    result = new string(32);
-
+    result = new string(0x41);
     assembly {
-      // result string
-      let ptr := sub(mload(0x40), 0x20)
+      let ptr := sub(mload(0x40), 0x60)
 
-      // length of value
       let len := callvalue()
       for {
         let value := convertValue
@@ -38,12 +28,22 @@ contract FixMath {
         len := add(len, 0x01)
       }
 
-      let _point := sload(point.slot)
+      let _point := 0x26
 
-      if gt(_point, sub(len, 0x01)) {
-        len := add(len, 0x02)
+      if gt(_point, len) {
         mstore8(ptr, 0x30)
         mstore8(add(ptr, 0x01), 0x2e)
+
+        for {
+          let cc := sub(_point, len)
+          let i := 0x02
+          len := add(len, add(i, cc))
+        } gt(cc, callvalue()) {
+          cc := sub(cc, 0x01)
+          i := add(i, 0x01)
+        } {
+          mstore8(add(ptr, i), 0x30)
+        }
       }
 
       for {
@@ -51,7 +51,6 @@ contract FixMath {
       } gt(convertValue, callvalue()) {
         lenLoop := sub(lenLoop, 0x01)
       } {
-        // if the maximum fractional part of the contract has reached -> point
         if eq(sub(len, lenLoop), _point) {
           mstore8(add(ptr, lenLoop), 0x2e)
           lenLoop := sub(lenLoop, 0x01)
@@ -69,11 +68,8 @@ contract FixMath {
 
   function toUint(string memory str) public view returns (uint256 result) {
     assembly {
-      // 0xvalue000000...00 -> 0x0000...00value
       let value := shr(mul(0x08, sub(0x20, mload(str))), mload(add(str, 0x20)))
-      // counter if the fractional part of the value is less than or greater than the maximum fractional part of the contract
       let counter := callvalue()
-      // flag if the fractional part (point) exists
       let pointExist := callvalue()
 
       for {
@@ -89,14 +85,12 @@ contract FixMath {
         counter := add(counter, 0x01)
       }
 
-      let _point := sload(point.slot)
+      let _point := 0x26
 
-      // if the fractional part (point) non-exists -> counter = 0x00
       if eq(pointExist, callvalue()) {
         counter := callvalue()
       }
 
-      // if the counter greater than the max fract part -> value >> (counter - point)
       if gt(counter, _point) {
         for {
           let i := sub(counter, _point)
@@ -107,7 +101,6 @@ contract FixMath {
         }
       }
 
-      // if the counter less than the max fract part -> (value << (point - counter)) | 0x30 (ascii 0)
       if gt(_point, counter) {
         for {
           let i := sub(_point, counter)
@@ -119,7 +112,6 @@ contract FixMath {
         }
       }
 
-      // result is the sum of all tenths of a number
       for {
         let i := 0x01
       } gt(value, callvalue()) {
