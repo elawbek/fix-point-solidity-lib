@@ -1,6 +1,5 @@
 import { ethers } from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { BigNumber, constants } from "ethers";
 
 import { FixMath, FixMath__factory } from "../typechain-types";
 
@@ -20,14 +19,9 @@ describe("", () => {
   });
 
   it("Point", async () => {
-    console.log(
-      await fixMath.toStr(
-        BigNumber.from("40000000000000000000000000000000000000")
-      )
-    );
-
-    console.log(await fixMath.toUint("1.1"));
-
-    console.log(await fixMath.fixAdd("0.3", "0.6"));
+    console.log(await fixMath.fixAdd("100.0", "3"));
+    console.log(await fixMath.fixSub("100.0", "3"));
+    console.log(await fixMath.fixDiv("100.0", "3.505"));
+    console.log(await fixMath.fixMul("100.0", "3.1"));
   });
 });

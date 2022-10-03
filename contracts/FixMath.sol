@@ -1,28 +1,55 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
+// TODO: overflows/underflows
 contract FixMath {
   function fixAdd(string calldata a, string calldata b)
     external
-    view
+    pure
     returns (string memory)
   {
     return toStr(toUint(a) + toUint(b));
   }
 
+  function fixSub(string calldata a, string calldata b)
+    external
+    pure
+    returns (string memory)
+  {
+    return toStr(toUint(a) - toUint(b));
+  }
+
+  function fixDiv(string calldata a, string calldata b)
+    external
+    pure
+    returns (string memory)
+  {
+    (uint256 result, uint256 multiplier) = toUintMulDiv(b);
+    return toStr((toUint(a) * 10**multiplier) / result);
+  }
+
+  function fixMul(string calldata a, string calldata b)
+    external
+    pure
+    returns (string memory)
+  {
+    (uint256 result, uint256 multiplier) = toUintMulDiv(b);
+    return toStr((toUint(a) / 10**multiplier) * result);
+  }
+
   function toStr(uint256 convertValue)
     public
-    view
+    pure
     returns (string memory result)
   {
     result = new string(0x41);
     assembly {
       let ptr := sub(mload(0x40), 0x60)
 
-      let len := callvalue()
+      let len := 0x00
       for {
         let value := convertValue
-      } gt(value, callvalue()) {
+      } gt(value, 0x00) {
         value := div(value, 0x0a)
       } {
         len := add(len, 0x01)
@@ -38,7 +65,7 @@ contract FixMath {
           let cc := sub(point, len)
           let i := 0x02
           len := add(len, add(i, cc))
-        } gt(cc, callvalue()) {
+        } gt(cc, 0x00) {
           cc := sub(cc, 0x01)
           i := add(i, 0x01)
         } {
@@ -48,7 +75,7 @@ contract FixMath {
 
       for {
         let lenLoop := len
-      } gt(convertValue, callvalue()) {
+      } gt(convertValue, 0x00) {
         lenLoop := sub(lenLoop, 0x01)
       } {
         if eq(sub(len, lenLoop), point) {
@@ -62,7 +89,7 @@ contract FixMath {
 
       for {
         let cc := len
-      } gt(cc, callvalue()) {
+      } gt(cc, 0x00) {
 
       } {
         switch shr(0xf8, mload(add(ptr, cc)))
@@ -70,8 +97,12 @@ contract FixMath {
           len := sub(len, 0x01)
           cc := sub(cc, 0x01)
         }
+        case 0x2e {
+          len := sub(len, 0x01)
+          cc := 0x00
+        }
         default {
-          cc := callvalue()
+          cc := 0x00
         }
       }
 
@@ -80,7 +111,7 @@ contract FixMath {
     }
   }
 
-  function toUint(string memory str) public view returns (uint256 result) {
+  function toUint(string memory str) public pure returns (uint256 result) {
     assembly {
       let strLen := sub(mload(str), 0x01)
       let ptr := mload(0x40)
@@ -96,18 +127,18 @@ contract FixMath {
         ptr := sub(ptr, 0x60)
       }
 
-      let pointExist := callvalue()
-      let counter := callvalue()
+      let pointExist := 0x00
+      let counter := 0x00
 
       for {
         let lenLoop := strLen
-      } gt(lenLoop, callvalue()) {
+      } gt(lenLoop, 0x00) {
 
       } {
         switch shr(0xf8, mload(add(ptr, lenLoop)))
         case 0x2e {
           pointExist := 0x01
-          lenLoop := callvalue()
+          lenLoop := 0x00
         }
         default {
           lenLoop := sub(lenLoop, 0x01)
@@ -118,9 +149,9 @@ contract FixMath {
       let point := 0x26
       let multiplier := 0x01
 
-      if eq(pointExist, callvalue()) {
+      if eq(pointExist, 0x00) {
         multiplier := exp(0x0a, point)
-        counter := callvalue()
+        counter := 0x00
       }
 
       if gt(counter, point) {
@@ -131,9 +162,16 @@ contract FixMath {
         multiplier := exp(0x0a, sub(point, counter))
       }
 
+      if eq(strLen, 0x00) {
+        result := add(
+          result,
+          mul(multiplier, sub(and(shr(0xf8, mload(ptr)), 0xff), 0x30))
+        )
+      }
+
       for {
 
-      } gt(strLen, callvalue()) {
+      } gt(strLen, 0x00) {
 
       } {
         let value := and(shr(0xf8, mload(add(ptr, strLen))), 0xff)
@@ -141,7 +179,7 @@ contract FixMath {
         case 0x2e {
           strLen := sub(strLen, 0x01)
 
-          if eq(strLen, callvalue()) {
+          if eq(strLen, 0x00) {
             value := and(shr(0xf8, mload(ptr)), 0xff)
             result := add(result, mul(multiplier, sub(value, 0x30)))
           }
@@ -151,7 +189,85 @@ contract FixMath {
           multiplier := mul(multiplier, 0x0a)
           strLen := sub(strLen, 0x01)
 
-          if eq(strLen, callvalue()) {
+          if eq(strLen, 0x00) {
+            value := and(shr(0xf8, mload(ptr)), 0xff)
+            result := add(result, mul(multiplier, sub(value, 0x30)))
+          }
+        }
+      }
+    }
+  }
+
+  function toUintMulDiv(string memory str)
+    public
+    pure
+    returns (uint256 result, uint256 counter)
+  {
+    assembly {
+      let strLen := sub(mload(str), 0x01)
+      let ptr := mload(0x40)
+
+      switch div(strLen, 0x20)
+      case 0x00 {
+        ptr := sub(ptr, 0x20)
+      }
+      case 0x01 {
+        ptr := sub(ptr, 0x40)
+      }
+      default {
+        ptr := sub(ptr, 0x60)
+      }
+
+      let pointExist := 0x00
+      counter := 0x00
+
+      for {
+        let lenLoop := strLen
+      } gt(lenLoop, 0x00) {
+
+      } {
+        switch shr(0xf8, mload(add(ptr, lenLoop)))
+        case 0x2e {
+          pointExist := 0x01
+          lenLoop := 0x00
+        }
+        default {
+          lenLoop := sub(lenLoop, 0x01)
+          counter := add(counter, 0x01)
+        }
+      }
+
+      let multiplier := 0x01
+
+      if eq(pointExist, 0x00) {
+        counter := 0x01
+      }
+
+      if eq(strLen, 0x00) {
+        result := add(result, sub(and(shr(0xf8, mload(ptr)), 0xff), 0x30))
+      }
+
+      for {
+
+      } gt(strLen, 0x00) {
+
+      } {
+        let value := and(shr(0xf8, mload(add(ptr, strLen))), 0xff)
+        switch value
+        case 0x2e {
+          strLen := sub(strLen, 0x01)
+
+          if eq(strLen, 0x00) {
+            value := and(shr(0xf8, mload(ptr)), 0xff)
+            result := add(result, mul(multiplier, sub(value, 0x30)))
+          }
+        }
+        default {
+          result := add(result, mul(multiplier, sub(value, 0x30)))
+          multiplier := mul(multiplier, 0x0a)
+          strLen := sub(strLen, 0x01)
+
+          if eq(strLen, 0x00) {
             value := and(shr(0xf8, mload(ptr)), 0xff)
             result := add(result, mul(multiplier, sub(value, 0x30)))
           }
