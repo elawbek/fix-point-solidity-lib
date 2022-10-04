@@ -19,9 +19,11 @@ describe("", () => {
   });
 
   it("Point", async () => {
-    console.log(await fixMath.fixAdd("100.0", "3"));
-    console.log(await fixMath.fixSub("100.0", "3"));
-    console.log(await fixMath.fixDiv("100.0", "3.505"));
-    console.log(await fixMath.fixMul("100.0", "3.1"));
+    // console.log(await fixMath.fixAdd("100.0", "3"));
+    // console.log(await fixMath.fixSub("100.0", "3"));
+    // console.log(await fixMath.fixDiv("100.0", "0"));
+    console.log(await fixMath.fixMul("11230.12350", "0.00001"));
+
+    console.log(await fixMath.toUintMulDiv("0"));
   });
 });

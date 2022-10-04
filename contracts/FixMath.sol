@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 // TODO: overflows/underflows
+// TODO: int math
 contract FixMath {
   function fixAdd(string calldata a, string calldata b)
     external
@@ -25,7 +26,7 @@ contract FixMath {
     returns (string memory)
   {
     (uint256 result, uint256 multiplier) = toUintMulDiv(b);
-    return toStr((toUint(a) * 10**multiplier) / result);
+    return toStr((toUint(a) * multiplier) / result);
   }
 
   function fixMul(string calldata a, string calldata b)
@@ -34,7 +35,7 @@ contract FixMath {
     returns (string memory)
   {
     (uint256 result, uint256 multiplier) = toUintMulDiv(b);
-    return toStr((toUint(a) / 10**multiplier) * result);
+    return toStr((toUint(a) / multiplier) * result);
   }
 
   function toStr(uint256 convertValue)
@@ -219,7 +220,7 @@ contract FixMath {
       }
 
       let pointExist := 0x00
-      counter := 0x00
+      counter := 0x01
 
       for {
         let lenLoop := strLen
@@ -233,7 +234,7 @@ contract FixMath {
         }
         default {
           lenLoop := sub(lenLoop, 0x01)
-          counter := add(counter, 0x01)
+          counter := mul(counter, 0x0a)
         }
       }
 
