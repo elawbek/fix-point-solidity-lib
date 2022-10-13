@@ -44,6 +44,25 @@ contract FixMath {
     return toStr((toUint(a) * result) / multiplier);
   }
 
+  function exp(string calldata a, uint256 num)
+    external
+    view
+    returns (string memory)
+  {
+    (uint256 result, uint256 multiplier) = toUintMulDiv(a);
+    uint256 _a = toUint(a);
+
+    for (uint256 i = 1; i < num; ) {
+      _a = (_a * result) / multiplier;
+
+      unchecked {
+        ++i;
+      }
+    }
+
+    return toStr(_a);
+  }
+
   /**
    * @notice convert decimal uint number to string
    *
@@ -63,7 +82,7 @@ contract FixMath {
       // set the pointer value to the beginning of the string
       let ptr := sub(mload(0x40), 0x60)
 
-      // a cycle for calculating the length of a number in decimal places
+      // a loop for calculating the length of a number in decimal places
       let len := 0x00
       for {
         let value := convertValue
@@ -211,6 +230,7 @@ contract FixMath {
       // if the number of characters before the point is greater than the maximum, trim the length so as not to take unnecessary
       if gt(counter, dot) {
         strLen := sub(strLen, sub(counter, dot))
+        counter := dot
       }
 
       // revert if interger part of number > (77 - dotPosition)
