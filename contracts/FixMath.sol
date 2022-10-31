@@ -407,8 +407,8 @@ contract FixMath {
     string memory str = _str;
 
     assembly {
-      // length for the pointer (-2 because the length is stored from 1 to N, and we need 0 to N-1, excluded sign)
-      let strLen := sub(mload(str), 0x02)
+      // length for the pointer (-1 because the length is stored from 1 to N, and we need 0 to N-1)
+      let strLen := sub(mload(str), 0x01)
       let ptr := mload(0x40)
 
       // choose pointer if string length is 0x20 (32), 0x40 (64) or 0x60 (96) bytes
@@ -428,8 +428,11 @@ contract FixMath {
       //2d
       if eq(shr(0xf8, mload(ptr)), 0x2d) {
         minus := 0x01
+
+        // excluded sign
+        ptr := add(ptr, 0x01)
+        strLen := sub(strLen, 0x01)
       }
-      ptr := add(ptr, 0x01)
 
       // flag if a dot exists
       let dotExist := 0x00

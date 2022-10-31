@@ -25,5 +25,6 @@ describe("", () => {
     console.log(await fixMath.fixMul("100", "3")); // 300
 
     console.log(await fixMath.toInt("-2.0123213"));
+    console.log(await fixMath.toInt("2.0123213"));
   });
 });
