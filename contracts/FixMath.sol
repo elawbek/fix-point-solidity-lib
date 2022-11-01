@@ -5,14 +5,12 @@ pragma solidity ^0.8.17;
 // TODO: int math
 contract FixMath {
   uint256 public dotPosition;
-  uint256 public one;
 
   constructor(uint256 _dotPosition) {
     dotPosition = _dotPosition;
-    one = 10 * 10**_dotPosition;
   }
 
-  function fixAdd(string calldata a, string calldata b)
+  function fixAddUint(string calldata a, string calldata b)
     external
     view
     returns (string memory)
@@ -20,7 +18,7 @@ contract FixMath {
     return toStrUint(toUint(a) + toUint(b));
   }
 
-  function fixSub(string calldata a, string calldata b)
+  function fixSubUint(string calldata a, string calldata b)
     external
     view
     returns (string memory)
@@ -28,7 +26,7 @@ contract FixMath {
     return toStrUint(toUint(a) - toUint(b));
   }
 
-  function fixDiv(string calldata a, string calldata b)
+  function fixDivUint(string calldata a, string calldata b)
     external
     view
     returns (string memory)
@@ -37,13 +35,47 @@ contract FixMath {
     return toStrUint((toUint(a) * multiplier) / result);
   }
 
-  function fixMul(string calldata a, string calldata b)
+  function fixMulUint(string calldata a, string calldata b)
     external
     view
     returns (string memory)
   {
     (uint256 result, uint256 multiplier) = toUintMulDiv(b);
     return toStrUint((toUint(a) * result) / multiplier);
+  }
+
+  function fixAddInt(string calldata a, string calldata b)
+    external
+    view
+    returns (string memory)
+  {
+    return toStrInt(toInt(a) + toInt(b));
+  }
+
+  function fixSubInt(string calldata a, string calldata b)
+    external
+    view
+    returns (string memory)
+  {
+    return toStrInt(toInt(a) - toInt(b));
+  }
+
+  function fixDivInt(string calldata a, string calldata b)
+    external
+    view
+    returns (string memory)
+  {
+    (int256 result, int256 multiplier) = toIntMulDiv(b);
+    return toStrInt((toInt(a) * multiplier) / result);
+  }
+
+  function fixMulInt(string calldata a, string calldata b)
+    external
+    view
+    returns (string memory)
+  {
+    (int256 result, int256 multiplier) = toIntMulDiv(b);
+    return toStrInt((toInt(a) * result) / multiplier);
   }
 
   /**
@@ -594,7 +626,7 @@ contract FixMath {
   function toIntMulDiv(string calldata _str)
     public
     view
-    returns (int256 result, uint256 multiplier)
+    returns (int256 result, int256 multiplier)
   {
     string memory str = _str;
 

@@ -19,15 +19,14 @@ describe("", () => {
   });
 
   it("Point", async () => {
-    console.log(await fixMath.fixAdd("100", "3")); // 103
-    console.log(await fixMath.fixSub("100", "3")); // 97
-    console.log(await fixMath.fixDiv("100", "3")); // 33.3333333333333333333333333
-    console.log(await fixMath.fixMul("100", "3")); // 300
+    console.log(await fixMath.fixAddUint("100", "3")); // 103
+    console.log(await fixMath.fixSubUint("100", "3")); // 97
+    console.log(await fixMath.fixDivUint("100", "3")); // 33.3333333333333333333333333
+    console.log(await fixMath.fixMulUint("100", "3")); // 300
 
-    console.log(await fixMath.toInt("-2.0123213"));
-    console.log(await fixMath.toInt("2.0123213"));
-
-    console.log(await fixMath.toStrInt(await fixMath.toInt("-2.0123213")));
-    console.log(await fixMath.toStrInt(await fixMath.toInt("2.0123213")));
+    console.log(await fixMath.fixAddInt("-100", "-3")); // -103
+    console.log(await fixMath.fixSubInt("-100", "-3")); // -97
+    console.log(await fixMath.fixDivInt("-100", "3")); // -33.3333333333333333333333333
+    console.log(await fixMath.fixMulInt("-100", "3")); // -300
   });
 });
