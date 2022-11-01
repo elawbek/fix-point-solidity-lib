@@ -26,5 +26,8 @@ describe("", () => {
 
     console.log(await fixMath.toInt("-2.0123213"));
     console.log(await fixMath.toInt("2.0123213"));
+
+    console.log(await fixMath.toStrInt(await fixMath.toInt("-2.0123213")));
+    console.log(await fixMath.toStrInt(await fixMath.toInt("2.0123213")));
   });
 });
