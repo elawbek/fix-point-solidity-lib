@@ -2,7 +2,6 @@
 pragma solidity ^0.8.17;
 
 // TODO: overflows/underflows
-// TODO: int math
 contract FixMath {
   uint256 public dotPosition;
 
@@ -112,7 +111,7 @@ contract FixMath {
       let dot := sload(dotPosition.slot)
 
       // the condition that there is no integer part of the number
-      if gt(dot, len) {
+      if or(eq(dot, len), gt(dot, len)) {
         // put a zero as first symbol of the string
         mstore8(ptr, 0x30)
         // put a dot as second symbol of the string
@@ -125,7 +124,7 @@ contract FixMath {
           // position of the pointer after the dot
           let i := 0x02
           // string length update including zero, dot and zeros after the dot
-          len := add(len, add(i, cc))
+          len := add(len, add(0x01, cc))
         } gt(cc, 0x00) {
           cc := sub(cc, 0x01)
           i := add(i, 0x01)
@@ -832,7 +831,7 @@ contract FixMath {
       let dot := sload(dotPosition.slot)
 
       // the condition that there is no integer part of the number
-      if gt(dot, len) {
+      if or(eq(dot, len), gt(dot, len)) {
         // put a zero as first symbol of the string
         mstore8(ptr, 0x30)
         // put a dot as second symbol of the string
@@ -845,7 +844,7 @@ contract FixMath {
           // position of the pointer after the dot
           let i := 0x02
           // string length update including zero, dot and zeros after the dot
-          len := add(len, add(i, cc))
+          len := add(len, add(0x01, cc))
         } gt(cc, 0x00) {
           cc := sub(cc, 0x01)
           i := add(i, 0x01)
@@ -900,5 +899,9 @@ contract FixMath {
       // write the correct length value
       mstore(result, len)
     }
+  }
+
+  function test(string memory a) external pure returns (bytes memory _a) {
+    _a = bytes(a);
   }
 }
