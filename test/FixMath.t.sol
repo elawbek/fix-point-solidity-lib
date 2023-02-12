@@ -2,16 +2,18 @@
 pragma solidity ^0.8.17;
 
 import "forge-std/Test.sol";
-import "../src/FixMath.sol";
+import {FixPointLib} from "src/FixPointLib.sol";
 
 contract FixMathTest is Test {
-    FixMath public fixMath;
+    using FixPointLib for *;
 
-    function setUp() public {
-        fixMath = new FixMath(15);
-    }
+    function test() external {
+        uint256 a = type(uint256).max;
 
-    function testAddUint() public view {
-        console2.log(fixMath.fixAddUint("2.5", "0.555555"));
+        console2.log(a.toStrUint(0));
+
+        string memory b = "0";
+
+        console2.log(b.toUint(15));
     }
 }
