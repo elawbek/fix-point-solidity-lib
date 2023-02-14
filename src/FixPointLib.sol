@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
+/// TODO reverts (!)
+
 library FixPointLib {
     /**
      * @notice convert decimal uint number to string
@@ -189,21 +191,21 @@ library FixPointLib {
             }
 
             for {
-                let cache := result
-            } gt(strLen, 0x00) {
+                let len := strLen
+            } gt(len, 0x00) {
 
             } {
                 // each iteration we pull the value
-                let value := and(shr(0xf8, mload(add(ptr, strLen))), 0xff)
+                let value := and(shr(0xf8, mload(add(ptr, len))), 0xff)
 
                 switch value
                 // if dot
                 case 0x2e {
                     // decrease length
-                    strLen := sub(strLen, 0x01)
+                    len := sub(len, 0x01)
 
                     // if the length is 0, count the last digit of the string
-                    if iszero(strLen) {
+                    if iszero(len) {
                         value := and(shr(0xf8, mload(ptr)), 0xff)
                         result := add(result, mul(multiplier, sub(value, 0x30)))
                     }
@@ -213,20 +215,29 @@ library FixPointLib {
                     result := add(result, mul(multiplier, sub(value, 0x30)))
                     // change the decimal point to 1 to the left
                     multiplier := mul(multiplier, 0x0a)
-                    strLen := sub(strLen, 0x01)
+                    len := sub(len, 0x01)
 
                     // if the length is 0, count the last digit of the string
-                    if iszero(strLen) {
+                    if iszero(len) {
                         value := and(shr(0xf8, mload(ptr)), 0xff)
                         result := add(result, mul(multiplier, sub(value, 0x30)))
                     }
                 }
+            }
 
-                if lt(result, cache) {
-                    revert(0x00, 0x00)
-                }
+            // a loop for calculating the length of a number in decimal places
+            let len
+            for {
+                let value := result
+            } gt(value, 0x00) {
+                // each iteration divide the number by 0x0a (10)
+                value := div(value, 0x0a)
+            } {
+                len := add(len, 0x01)
+            }
 
-                cache := result
+            if lt(len, mload(str)) {
+                result := not(0)
             }
         }
     }
@@ -359,29 +370,32 @@ library FixPointLib {
      * @notice convert decimal int number to string
      *
      * @dev
-     * - max length of string - 78 symbols, included sign
+     * - max length of the returned string - 79 symbols (include dot and sign)
      * - max int value - type(int256).max
      * - min int value - type(int256).min
+     * - dot value MUST be less than 77
      */
     function toStrInt(int256 convertValue, uint256 dot)
         internal
         pure
         returns (string memory result)
     {
-        // allocate 0x60 (96) bytes to the future line
-        result = new string(0x41);
+        require(dot < 77);
 
         assembly {
             // set the pointer value to the beginning of the string
-            let ptr := sub(mload(0x40), 0x60)
+            let ptr := add(result, 0x20)
 
-            // a loop for calculating the length of a number in decimal places
-            let len := 0x00
+            let len
+            let minus
+
+            // check for sign
             if eq(shr(0xff, convertValue), 0x01) {
                 convertValue := add(not(convertValue), 0x01)
                 len := 0x01
 
-                mstore8(ptr, 0x2d)
+                mstore8(ptr, 0x2d) // "-"
+                minus := 0x01
             }
 
             for {
@@ -393,28 +407,92 @@ library FixPointLib {
                 len := add(len, 0x01)
             }
 
-            // load from the storage the maximum value of decimal places in the decimal representation of the number
+            // // the condition that there is no integer part of the number
+            // if or(eq(dot, len), gt(dot, len)) {
+            //     // position of the pointer after the dot
+            //     let i
+            //     // the difference to the numbers
+            //     let cc := sub(dot, len)
 
-            // the condition that there is no integer part of the number
-            if or(eq(dot, len), gt(dot, len)) {
-                // put a zero as first symbol of the string
-                mstore8(ptr, 0x30)
-                // put a dot as second symbol of the string
-                mstore8(add(ptr, 0x01), 0x2e)
+            //     switch minus
+            //     case 0x00 {
+            //         // put a zero as first/second symbol of the string
+            //         mstore8(ptr, 0x30)
+            //         // put a dot as second/third symbol of the string
+            //         mstore8(add(ptr, 0x01), 0x2e)
+            //         // string length update including zero, dot and zeros after the dot
+            //         len := add(len, add(0x01, cc))
 
-                // put zeros after the dot before the significant numbers
-                for {
-                    // the difference to the numbers
-                    let cc := sub(dot, len)
-                    // position of the pointer after the dot
-                    let i := 0x02
-                    // string length update including zero, dot and zeros after the dot
-                    len := add(len, add(0x01, cc))
-                } gt(cc, 0x00) {
-                    cc := sub(cc, 0x01)
-                    i := add(i, 0x01)
-                } {
-                    mstore8(add(ptr, i), 0x30)
+            //         i := 0x02
+            //     }
+            //     default {
+            //         // put a zero as first/second symbol of the string
+            //         mstore8(add(ptr, 0x01), 0x30)
+            //         // put a dot as second/third symbol of the string
+            //         mstore8(add(ptr, 0x02), 0x2e)
+            //         // string length update including zero, dot and zeros after the dot
+            //         len := add(len, add(0x02, cc))
+
+            //         i := 0x03
+            //     }
+
+            //     // put zeros after the dot before the significant numbers
+            //     for {
+
+            //     } gt(cc, 0x00) {
+            //         cc := sub(cc, 0x01)
+            //         i := add(i, 0x01)
+            //     } {
+            //         mstore8(add(ptr, i), 0x30)
+            //     }
+            // }
+
+            switch minus
+            case 0x00 {
+                // the condition that there is no integer part of the number
+                if or(eq(dot, len), gt(dot, len)) {
+                    // put a zero as first symbol of the string
+                    mstore8(ptr, 0x30)
+                    // put a dot as second symbol of the string
+                    mstore8(add(ptr, 0x01), 0x2e)
+
+                    // put zeros after the dot before the significant numbers
+                    for {
+                        // position of the pointer after the dot
+                        let i := 0x02
+                        // the difference to the numbers
+                        let cc := sub(dot, len)
+
+                        len := add(len, add(0x01, cc))
+                    } gt(cc, 0x00) {
+                        cc := sub(cc, 0x01)
+                        i := add(i, 0x01)
+                    } {
+                        mstore8(add(ptr, i), 0x30)
+                    }
+                }
+            }
+            default {
+                if or(eq(dot, sub(len, 0x01)), gt(dot, sub(len, 0x01))) {
+                    // put a zero as second symbol of the string
+                    mstore8(add(ptr, 0x01), 0x30)
+                    // put a dot as third symbol of the string
+                    mstore8(add(ptr, 0x02), 0x2e)
+
+                    // put zeros after the dot before the significant numbers
+                    for {
+                        // position of the pointer after the dot
+                        let i := 0x03
+                        // the difference to the numbers
+                        let cc := sub(dot, sub(len, 0x01))
+
+                        len := add(len, add(0x01, cc))
+                    } gt(cc, 0x00) {
+                        cc := sub(cc, 0x01)
+                        i := add(i, 0x01)
+                    } {
+                        mstore8(add(ptr, i), 0x30)
+                    }
                 }
             }
 
@@ -451,11 +529,11 @@ library FixPointLib {
                 // if dot, same thing
                 case 0x2e {
                     len := sub(len, 0x01)
-                    cc := 0x00
+                    break
                 }
                 // otherwise break
                 default {
-                    cc := 0x00
+                    break
                 }
             }
 
@@ -463,6 +541,8 @@ library FixPointLib {
             len := add(len, 0x01)
             // write the correct length value
             mstore(result, len)
+
+            mstore(0x40, add(ptr, len))
         }
     }
 
