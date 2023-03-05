@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.0;
 
 /// TODO reverts (!)
 
@@ -17,12 +17,13 @@ library FixPointLib {
         returns (string memory result)
     {
         require(dot < 78);
+
         assembly {
             // set the pointer value to the beginning of the string
             let ptr := add(result, 0x20)
 
             // a loop for calculating the length of a number in decimal places
-            let len  // 0x00 default value
+            let len
             for {
                 let value := convertValue
             } gt(value, 0x00) {
@@ -33,7 +34,8 @@ library FixPointLib {
             }
 
             // the condition that there is no integer part of the number
-            if or(eq(dot, len), gt(dot, len)) {
+            // if  or(eq(dot, len), gt(dot, len)) {
+            if iszero(lt(dot, len)) {
                 // put a zero as first symbol of the string
                 mstore8(ptr, 0x30)
                 // put a dot as second symbol of the string
@@ -46,7 +48,7 @@ library FixPointLib {
                     // position of the pointer after the dot
                     let i := 0x02
                     // string length update including zero, dot and zeros after the dot
-                    len := add(len, add(0x01, cc))
+                    len := add(len, add(i, cc))
                 } gt(cc, 0x00) {
                     cc := sub(cc, 0x01)
                     i := add(i, 0x01)
@@ -58,11 +60,12 @@ library FixPointLib {
             // put numbers to string
             for {
                 let lenLoop := len
+                let dotPosition := sub(lenLoop, dot)
             } gt(convertValue, 0x00) {
                 lenLoop := sub(lenLoop, 0x01)
             } {
                 // put a dot if there is an integer part
-                if eq(sub(len, lenLoop), dot) {
+                if eq(dotPosition, lenLoop) {
                     mstore8(add(ptr, lenLoop), 0x2e)
                     lenLoop := sub(lenLoop, 0x01)
                 }
@@ -101,7 +104,7 @@ library FixPointLib {
             // write the correct length value
             mstore(result, len)
 
-            mstore(0x40, add(ptr, len))
+            mstore(0x40, add(ptr, mul(add(div(len, 0x20), 0x01), 0x20))) // TODO optimize
         }
     }
 
@@ -119,7 +122,7 @@ library FixPointLib {
         returns (uint256 result)
     {
         assembly {
-            // if str length gt 79 or eq 0 -> revert
+            // if str length gt 79 or eq 0 -> revert // TODO
             let strLen := mload(str)
             if or(gt(strLen, 0x4f), iszero(strLen)) {
                 revert(0x00, 0x00)
@@ -236,7 +239,8 @@ library FixPointLib {
                 len := add(len, 0x01)
             }
 
-            if lt(len, mload(str)) {
+            // if overflow -> result = type(uint256).max
+            if lt(len, strLen) {
                 result := not(0)
             }
         }
