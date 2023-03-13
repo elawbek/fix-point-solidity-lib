@@ -5,17 +5,21 @@ import "forge-std/Test.sol";
 import {FixPointLib} from "src/FixPointLib.sol";
 
 contract FixMathTest is Test {
-    using FixPointLib for *;
+    using FixPointLib for uint;
+    using FixPointLib for string;
 
-    function test() external {
-        // uint256 a = 12121;
-        // console2.log(a.toStrUint(0));
-        string
-            memory b = "115792089237316195423570985008687907853269984665640564039457584007913129639936";
-        console2.log(b.toUint(0));
-        // int256 a = 123;
-        // console2.logString(a.toStrInt(12));
-        // a = -2312312312;
-        // console2.logString(a.toStrInt(12));
+    function test() external view {
+        // uint256 a = 1;
+        // console2.log(a);
+        // console2.log(a.uintToString(15));
+        // console2.log(a.uintToStringUnsafe(120));
+
+        string memory b = "6666666666666666666666666666";
+        console2.log(b.stringToUint(18));
+
+        // int256 c = 123;
+        // console2.logString(c.toStrInt(12));
+        // c = -2312312312;
+        // console2.logString(c.toStrInt(12));
     }
 }
