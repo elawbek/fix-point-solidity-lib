@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 library FixPointLib {
     error UnsafeDotPosition(uint256 dot);
     error IncorrectStringLength(uint256 length, bool dotExists);
-    error IncorrectIntegerPart();
+    error IncorrectIntegerPart(uint256 integerLength);
 
     /**
      * @notice unsafe convert decimal uint number to string
@@ -150,10 +150,10 @@ library FixPointLib {
      * @notice convert string to uint number, considering the dot
      *
      * @dev
-     * - max safe string value without dot:
-     *      "899999999999999999999999999999999999999999999999999999999999999999999999999999"
-     * - max length of string - 79 symbols (include dot)
-     * - max return uint value - type(uint256).max
+     * - min safe string:
+     *      "1.15792089237316195423570985008687907853269984665640564039457584007913129639935"
+     * - max safe string:
+     *      "115792089237316195423570985008687907853269984665640564039457584007913129639935"
      * - revert if interger part of number > (77 - dotPosition)
      */
     function stringToUint(
@@ -161,8 +161,7 @@ library FixPointLib {
         uint256 dot
     ) internal pure returns (uint256 result) {
         assembly {
-            if iszero(lt(dot, 0x4e)) {
-                // 0x4e == 78
+            if gt(dot, 0x4d) {
                 // 0xbfb6d3c2 == bytes4(keccak256("UnsafeDotPosition(uint256)"))
                 mstore(0x00, 0xbfb6d3c2)
                 mstore(0x20, dot)
@@ -172,7 +171,8 @@ library FixPointLib {
 
             // length for the pointer (-1 because the length is stored from 1 to N, and we need 0 to N-1)
             let strLen := sub(mload(str), 0x01)
-            let ptr := add(str, 0x20)
+            // so that in all loops each iteration does not execute shr(0xf8, value)
+            let ptr := add(str, 0x01)
 
             // flag if a dot exists
             let dotExists
@@ -184,7 +184,7 @@ library FixPointLib {
             } gt(lenLoop, 0x00) {
 
             } {
-                switch shr(0xf8, mload(add(ptr, lenLoop)))
+                switch and(mload(add(ptr, lenLoop)), 0xff)
                 // if dot -> break
                 case 0x2e {
                     dotExists := 0x01
@@ -196,18 +196,30 @@ library FixPointLib {
                 }
             }
 
-            let lengthHelper := mload(str)
-            // ((len > 79) && dotExists) || ((len > 78) && !dotExists)
-            if or(
-                and(gt(lengthHelper, 0x4f), dotExists),
-                and(gt(lengthHelper, 0x4e), iszero(dotExists))
-            ) {
-                // 0x81607476 == bytes4(keccak256("IncorrectStringLength(uint256,bool)"))
-                mstore(0x00, 0x81607476)
-                mstore(0x20, lengthHelper)
-                mstore(0x40, dotExists)
+            let lengthHelper := add(strLen, 0x01)
+            for {
+                let lenLoop
+                let c
+            } lt(lenLoop, lengthHelper) {
+                lenLoop := add(lenLoop, 0x01)
+            } {
+                switch and(mload(add(ptr, lenLoop)), 0xff)
+                case 0x30 {
+                    c := add(c, 0x01)
+                    continue
+                }
+                case 0x2e {
+                    c := sub(c, 0x01)
+                    strLen := sub(strLen, c)
+                    ptr := add(ptr, c)
+                    break
+                }
+                default {
+                    strLen := sub(strLen, c)
+                    ptr := add(ptr, c)
 
-                revert(0x1c, 0x44)
+                    break
+                }
             }
 
             // a multiplier to convert the string to a number
@@ -226,11 +238,26 @@ library FixPointLib {
                 counter := dot
             }
 
+            lengthHelper := add(strLen, 0x01)
+            // ((len > 79) && dotExists) || ((len > 78) && !dotExists)
+            if or(
+                and(gt(lengthHelper, 0x4f), dotExists),
+                and(gt(lengthHelper, 0x4e), iszero(dotExists))
+            ) {
+                // 0x81607476 == bytes4(keccak256("IncorrectStringLength(uint256,bool)"))
+                mstore(0x00, 0x81607476)
+                mstore(0x20, lengthHelper)
+                mstore(0x40, dotExists)
+
+                revert(0x1c, 0x44)
+            }
+
             // if interger part of number gt 78 - dotPosition -> revert
-            if gt(sub(strLen, counter), sub(0x4e, dot)) {
+            if gt(sub(lengthHelper, counter), sub(add(0x4e, dotExists), dot)) {
                 // 0x8a94c678 == bytes4(keccak256("IncorrectIntegerPart()"))
-                mstore(0x00, 0x8a94c678)
-                revert(0x1c, 0x04)
+                mstore(0x00, 0x4f885930)
+                mstore(0x20, sub(lengthHelper, counter))
+                revert(0x1c, 0x24)
             }
 
             // if it does not reach the maximum length, increase the multiplier to the first significant value of the number
@@ -238,12 +265,16 @@ library FixPointLib {
                 multiplier := exp(0x0a, sub(dot, counter))
             }
 
+            let overflowHelper
+
             // if the length for the pointer is immediately 0, it won't get into the loop, so we have to calc a single value
             if iszero(strLen) {
-                result := add(
-                    result,
-                    mul(multiplier, sub(and(shr(0xf8, mload(ptr)), 0xff), 0x30))
+                overflowHelper := mul(
+                    multiplier,
+                    sub(and(mload(ptr), 0xff), 0x30)
                 )
+
+                result := add(result, overflowHelper)
             }
 
             for {
@@ -252,7 +283,7 @@ library FixPointLib {
 
             } {
                 // each iteration we pull the value
-                let value := and(shr(0xf8, mload(add(ptr, len))), 0xff)
+                let value := and(mload(add(ptr, len)), 0xff)
 
                 switch value
                 // if dot
@@ -262,8 +293,11 @@ library FixPointLib {
 
                     // if the length is 0, count the last digit of the string
                     if iszero(len) {
-                        value := and(shr(0xf8, mload(ptr)), 0xff)
-                        result := add(result, mul(multiplier, sub(value, 0x30)))
+                        overflowHelper := mul(
+                            multiplier,
+                            sub(and(mload(ptr), 0xff), 0x30)
+                        )
+                        result := add(result, overflowHelper)
                     }
                 }
                 // otherwise
@@ -275,25 +309,16 @@ library FixPointLib {
 
                     // if the length is 0, count the last digit of the string
                     if iszero(len) {
-                        value := and(shr(0xf8, mload(ptr)), 0xff)
-                        result := add(result, mul(multiplier, sub(value, 0x30)))
+                        overflowHelper := mul(
+                            multiplier,
+                            sub(and(mload(ptr), 0xff), 0x30)
+                        )
+                        result := add(result, overflowHelper)
                     }
                 }
             }
 
-            // a loop for calculating the length of a number in decimal places
-            let len := add(dot, dotExists)
-            for {
-                let value := result
-            } gt(value, 0x00) {
-                // each iteration divide the number by 0x0a (10)
-                value := div(value, 0x0a)
-            } {
-                len := add(len, 0x01)
-            }
-
-            // if overflow -> result = type(uint256).max
-            if lt(len, add(strLen, 0x01)) {
+            if lt(result, overflowHelper) {
                 result := not(0)
             }
         }
