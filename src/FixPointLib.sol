@@ -146,6 +146,13 @@ library FixPointLib {
         }
     }
 
+    function stringToUint(
+        string memory str,
+        uint256 dot
+    ) internal pure returns (uint256 result) {
+        result = _convertFromString(str, dot, 0);
+    }
+
     /**
      * @notice convert string to uint number, considering the dot
      *
@@ -156,12 +163,16 @@ library FixPointLib {
      *      "115792089237316195423570985008687907853269984665640564039457584007913129639935"
      * - revert if interger part of number > (77 - dotPosition)
      */
-    function stringToUint(
+    function _convertFromString(
         string memory str,
-        uint256 dot
-    ) internal pure returns (uint256 result) {
+        uint256 dot,
+        uint toInt
+    ) private pure returns (uint256 result) {
         assembly {
-            if gt(dot, 0x4d) {
+            let minus := and(toInt, 0x01)
+            toInt := shr(0x01, toInt)
+
+            if gt(dot, sub(0x4d, toInt)) {
                 // 0xbfb6d3c2 == bytes4(keccak256("UnsafeDotPosition(uint256)"))
                 mstore(0x00, 0xbfb6d3c2)
                 mstore(0x20, dot)
@@ -170,9 +181,9 @@ library FixPointLib {
             }
 
             // length for the pointer (-1 because the length is stored from 1 to N, and we need 0 to N-1)
-            let strLen := sub(mload(str), 0x01)
+            let strLen := sub(mload(str), add(0x01, minus))
             // so that in all loops each iteration does not execute shr(0xf8, value)
-            let ptr := add(str, 0x01)
+            let ptr := add(str, add(0x01, minus))
 
             // flag if a dot exists
             let dotExists
@@ -196,6 +207,7 @@ library FixPointLib {
                 }
             }
 
+            // trim zeros off the front
             let lengthHelper := add(strLen, 0x01)
             for {
                 let lenLoop
@@ -241,8 +253,8 @@ library FixPointLib {
             lengthHelper := add(strLen, 0x01)
             // ((len > 79) && dotExists) || ((len > 78) && !dotExists)
             if or(
-                and(gt(lengthHelper, 0x4f), dotExists),
-                and(gt(lengthHelper, 0x4e), iszero(dotExists))
+                and(gt(lengthHelper, sub(0x4f, toInt)), dotExists),
+                and(gt(lengthHelper, sub(0x4e, toInt)), iszero(dotExists))
             ) {
                 // 0x81607476 == bytes4(keccak256("IncorrectStringLength(uint256,bool)"))
                 mstore(0x00, 0x81607476)
@@ -253,7 +265,10 @@ library FixPointLib {
             }
 
             // if interger part of number gt 78 - dotPosition -> revert
-            if gt(sub(lengthHelper, counter), sub(add(0x4e, dotExists), dot)) {
+            if gt(
+                sub(lengthHelper, counter),
+                sub(add(sub(0x4e, toInt), dotExists), dot)
+            ) {
                 // 0x8a94c678 == bytes4(keccak256("IncorrectIntegerPart()"))
                 mstore(0x00, 0x4f885930)
                 mstore(0x20, sub(lengthHelper, counter))
@@ -266,13 +281,13 @@ library FixPointLib {
             }
 
             let overflowHelper
+            let lastDigit
 
             // if the length for the pointer is immediately 0, it won't get into the loop, so we have to calc a single value
             if iszero(strLen) {
-                overflowHelper := mul(
-                    multiplier,
-                    sub(and(mload(ptr), 0xff), 0x30)
-                )
+                lastDigit := sub(and(mload(ptr), 0xff), 0x30)
+
+                overflowHelper := mul(multiplier, lastDigit)
 
                 result := add(result, overflowHelper)
             }
@@ -293,10 +308,9 @@ library FixPointLib {
 
                     // if the length is 0, count the last digit of the string
                     if iszero(len) {
-                        overflowHelper := mul(
-                            multiplier,
-                            sub(and(mload(ptr), 0xff), 0x30)
-                        )
+                        lastDigit := sub(and(mload(ptr), 0xff), 0x30)
+
+                        overflowHelper := mul(multiplier, lastDigit)
                         result := add(result, overflowHelper)
                     }
                 }
@@ -309,17 +323,43 @@ library FixPointLib {
 
                     // if the length is 0, count the last digit of the string
                     if iszero(len) {
-                        overflowHelper := mul(
-                            multiplier,
-                            sub(and(mload(ptr), 0xff), 0x30)
-                        )
+                        lastDigit := sub(and(mload(ptr), 0xff), 0x30)
+
+                        overflowHelper := mul(multiplier, lastDigit)
                         result := add(result, overflowHelper)
                     }
                 }
             }
 
-            if lt(result, overflowHelper) {
-                result := not(0)
+            if iszero(lastDigit) {
+                // avoid division zero
+                lastDigit := 0x01
+                multiplier := 0x00
+            }
+
+            let overflow := or(
+                iszero(eq(multiplier, div(overflowHelper, lastDigit))),
+                lt(result, overflowHelper)
+            )
+
+            switch minus
+            case 0x00 {
+                if overflow {
+                    switch toInt
+                    case 0x00 {
+                        result := not(0x00)
+                    }
+                    default {
+                        result := shr(0x01, not(0x00))
+                    }
+                }
+            }
+            default {
+                result := not(sub(result, 0x01))
+
+                if overflow {
+                    result := shl(0xff, 0x01)
+                }
             }
         }
     }
@@ -390,202 +430,19 @@ library FixPointLib {
      * - max int value - type(int256).max
      * - revert if interger part of number > (76 - dotPosition)
      */
-    function toInt(
+    function stringToInt(
         string memory str,
         uint256 dot
     ) internal pure returns (int256 result) {
+        // 0b10
+        uint toInt = 2;
         assembly {
-            // length for the pointer (-1 because the length is stored from 1 to N, and we need 0 to N-1)
-            let strLen := sub(mload(str), 0x01)
-            let ptr := mload(0x40)
-
-            // choose pointer if string length is 0x20 (32), 0x40 (64) or 0x60 (96) bytes
-            switch div(strLen, 0x20)
-            case 0x00 {
-                ptr := sub(ptr, 0x20)
-            }
-            case 0x01 {
-                ptr := sub(ptr, 0x40)
-            }
-            default {
-                ptr := sub(ptr, 0x60)
-            }
-
-            // flag if a minus exists
-            let minus := 0x00
-            //2d
-            if eq(shr(0xf8, mload(ptr)), 0x2d) {
-                minus := 0x01
-
-                // excluded sign
-                ptr := add(ptr, 0x01)
-                strLen := sub(strLen, 0x01)
-            }
-
-            // flag if a dot exists
-            let dotExist := 0x00
-            let counter := 0x00
-
-            // count to a dot in the string
-            for {
-                let lenLoop := strLen
-            } gt(lenLoop, 0x00) {
-
-            } {
-                switch shr(0xf8, mload(add(ptr, lenLoop)))
-                // if dot -> break
-                case 0x2e {
-                    dotExist := 0x01
-                    lenLoop := 0x00
-                }
-                default {
-                    lenLoop := sub(lenLoop, 0x01)
-                    counter := add(counter, 0x01)
-                }
-            }
-
-            // a multiplier to convert the string to a number
-            let multiplier := 0x01
-
-            // if there is no dot, then increase the multiplier immediately to an integer part of the number
-            if eq(dotExist, 0x00) {
-                multiplier := exp(0x0a, dot)
-                // not to fall into the following condition
-                counter := 0x00
-            }
-
-            // if the number of characters before the point is greater than the maximum, trim the length so as not to take unnecessary
-            if gt(counter, dot) {
-                strLen := sub(strLen, sub(counter, dot))
-                counter := dot
-            }
-
-            // revert if interger part of number > (76 - dotPosition)
-            if gt(sub(strLen, counter), sub(0x4c, dot)) {
-                mstore(0x00, shl(0xe0, 0x08c379a0))
-                mstore(0x04, 0x20)
-                mstore(0x24, 0x08)
-                // overflow
-                mstore(0x44, shl(0xc0, 0x6f766572666c6f77))
-                revert(0x00, 0x64)
-            }
-
-            // if it does not reach the maximum length, increase the multiplier to the first significant value of the number
-            if and(gt(dot, counter), eq(dotExist, 0x01)) {
-                multiplier := exp(0x0a, sub(dot, counter))
-            }
-
-            switch minus
-            case 0x00 {
-                // if the length for the pointer is immediately 0, it won't get into the loop, so we have to calc a single value
-                if eq(strLen, 0x00) {
-                    result := add(
-                        result,
-                        mul(
-                            multiplier,
-                            sub(and(shr(0xf8, mload(ptr)), 0xff), 0x30)
-                        )
-                    )
-                }
-
-                for {
-
-                } gt(strLen, 0x00) {
-
-                } {
-                    // each iteration we pull the value
-                    let value := and(shr(0xf8, mload(add(ptr, strLen))), 0xff)
-
-                    switch value
-                    // if dot
-                    case 0x2e {
-                        // decrease length
-                        strLen := sub(strLen, 0x01)
-
-                        // if the length is 0, count the last digit of the string
-                        if eq(strLen, 0x00) {
-                            value := and(shr(0xf8, mload(ptr)), 0xff)
-                            result := add(
-                                result,
-                                mul(multiplier, sub(value, 0x30))
-                            )
-                        }
-                    }
-                    // otherwise
-                    default {
-                        // plus what's needed
-                        result := add(result, mul(multiplier, sub(value, 0x30)))
-                        // change the decimal point to 1 to the left
-                        multiplier := mul(multiplier, 0x0a)
-                        strLen := sub(strLen, 0x01)
-
-                        // if the length is 0, count the last digit of the string
-                        if eq(strLen, 0x00) {
-                            value := and(shr(0xf8, mload(ptr)), 0xff)
-                            result := add(
-                                result,
-                                mul(multiplier, sub(value, 0x30))
-                            )
-                        }
-                    }
-                }
-            }
-            default {
-                // result := sub(0x00, multiplier)
-
-                // if the length for the pointer is immediately 0, it won't get into the loop, so we have to calc a single value
-                if eq(strLen, 0x00) {
-                    result := sub(
-                        result,
-                        mul(
-                            multiplier,
-                            sub(and(shr(0xf8, mload(ptr)), 0xff), 0x30)
-                        )
-                    )
-                }
-
-                for {
-
-                } gt(strLen, 0x00) {
-
-                } {
-                    // each iteration we pull the value
-                    let value := and(shr(0xf8, mload(add(ptr, strLen))), 0xff)
-
-                    switch value
-                    // if dot
-                    case 0x2e {
-                        // decrease length
-                        strLen := sub(strLen, 0x01)
-
-                        // if the length is 0, count the last digit of the string
-                        if eq(strLen, 0x00) {
-                            value := and(shr(0xf8, mload(ptr)), 0xff)
-                            result := sub(
-                                result,
-                                mul(multiplier, sub(value, 0x30))
-                            )
-                        }
-                    }
-                    // otherwise
-                    default {
-                        // plus what's needed
-                        result := sub(result, mul(multiplier, sub(value, 0x30)))
-                        // change the decimal point to 1 to the left
-                        multiplier := mul(multiplier, 0x0a)
-                        strLen := sub(strLen, 0x01)
-
-                        // if the length is 0, count the last digit of the string
-                        if eq(strLen, 0x00) {
-                            value := and(shr(0xf8, mload(ptr)), 0xff)
-                            result := sub(
-                                result,
-                                mul(multiplier, sub(value, 0x30))
-                            )
-                        }
-                    }
-                }
+            if eq(and(mload(add(str, 0x01)), 0xff), 0x2d) {
+                // 0b11
+                toInt := add(toInt, 0x01)
             }
         }
+
+        result = int(_convertFromString(str, dot, toInt));
     }
 }
