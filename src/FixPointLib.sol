@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+/// @title FixPointLib
+/// @author ElawBek
+/// @notice Library for converting numbers from uint/int to string and vice versa
 library FixPointLib {
     error UnsafeDotPosition(uint256 dot);
     error IncorrectStringLength(uint256 length, bool dotExists);
     error IncorrectIntegerPart(uint256 integerLength);
 
     /**
-     * @notice unsafe convert decimal uint number to string
-     * @dev
-     * - the `dot` can have any value
+     * @notice unsafe conversion of a decimal uint number to a string
+     * with any number of decimal places after the decimal point
      */
     function uintToStringUnsafe(
         uint256 convertValue,
@@ -19,11 +21,15 @@ library FixPointLib {
     }
 
     /**
-     * @notice convert decimal uint number to string
+     * @notice  convert a decimal uint number to a string
      * @dev
-     * - max length of the returned `result` is 79 symbols (include dot)
-     * - max `convertValue` value is type(uint256).max
-     * - the `dot` value MUST be less than 78
+     * - the maximum length of the returned `result' is 79 characters (including the dot)
+     * - the maximum value of `convertValue` - type(uint256).max
+     * - The `dot` value MUST be less than 78
+     *  thus, the maximum value of the returned string is
+     *  "1.15792089237316195423570985008687907853269984665640564039457584007913129639935"
+     *  or
+     *  "115792089237316195423570985008687907853269984665640564039457584007913129639935"
      */
     function uintToString(
         uint256 convertValue,
@@ -34,12 +40,76 @@ library FixPointLib {
                 // 0xbfb6d3c2 == bytes4(keccak256("UnsafeDotPosition(uint256)"))
                 mstore(0x00, 0xbfb6d3c2)
                 mstore(0x20, dot)
-
                 revert(0x1c, 0x24)
             }
         }
 
         result = _uintToString(convertValue, dot, 0);
+    }
+
+    /**
+     * @notice unsafe conversion of a decimal int number to a string
+     * with any number of decimal places after the decimal point
+     */
+    function intToStringUnsafe(
+        int256 convertValue,
+        uint256 dot
+    ) internal pure returns (string memory result) {
+        result = _intToString(convertValue, dot);
+    }
+
+    /**
+     * @notice  convert a decimal int number to a string
+     * @dev
+     * - the maximum length of the returned `result' is 78 characters (including the dot but exclude sign)
+     * - the maximum value of `convertValue` - type(int256).max
+     * - the minimum value of `convertValue` - type(int256).min
+     * - The `dot` value MUST be less than 77
+     *  thus, the maximum value of the returned string is
+     *      "5.7896044618658097711785492504343953926634992332820282019728792003956564819967"
+     *   or
+     *      "57896044618658097711785492504343953926634992332820282019728792003956564819967"
+     * - the minimum:
+     *      "-5.7896044618658097711785492504343953926634992332820282019728792003956564819968"
+     *   or
+     *      "-57896044618658097711785492504343953926634992332820282019728792003956564819968"
+     */
+    function intToString(
+        int256 convertValue,
+        uint256 dot
+    ) internal pure returns (string memory result) {
+        assembly {
+            if gt(dot, 0x4c) {
+                // 0xbfb6d3c2 == bytes4(keccak256("UnsafeDotPosition(uint256)"))
+                mstore(0x00, 0xbfb6d3c2)
+                mstore(0x20, dot)
+
+                revert(0x1c, 0x24)
+            }
+        }
+
+        result = _intToString(convertValue, dot);
+    }
+
+    function _intToString(
+        int256 convertValue,
+        uint256 dot
+    ) private pure returns (string memory result) {
+        uint value;
+        uint minus;
+        assembly {
+            // check for sign
+            if shr(0xff, convertValue) {
+                convertValue := add(not(convertValue), 0x01)
+
+                // write "-" to the `result`
+                mstore8(add(result, 0x20), 0x2d) // "-"
+                minus := 0x01
+            }
+            value := convertValue
+        }
+
+        result = _uintToString(value, dot, minus);
     }
 
     function _uintToString(
@@ -51,6 +121,9 @@ library FixPointLib {
             // set the pointer value to the beginning of the string
             let ptr := add(result, 0x20)
 
+            // if the converted value is 0, then write "0" as the `result`
+            // this prevents unwanted recalculations of the length of the string due
+            // to the removal of all non-essential elements equal to "0"
             switch convertValue
             case 0 {
                 mstore8(ptr, 0x30)
@@ -59,28 +132,31 @@ library FixPointLib {
                 mstore(0x40, add(ptr, 0x20))
             }
             default {
-                // a loop for calculating the length of a number in decimal places
-                let len := minus
+                let len
+                // loop to calculate the length of a number in the decimal representation of a number
                 for {
                     let value := convertValue
                 } gt(value, 0x00) {
-                    // each iteration divide the number by 0x0a (10)
+                    // each iteration the number is divided by 0x0a (10)
                     value := div(value, 0x0a)
                 } {
                     len := add(len, 0x01)
                 }
 
-                if iszero(lt(dot, sub(len, minus))) {
-                    // put the zero
+                // if the length of the string is less than or equal to the parameter `dot`,
+                // we write in the `result` "0." and all zeros to the significant part
+                if iszero(lt(dot, len)) {
+                    // put zero and dot after "-" if the number is negative
+                    // otherwise at the beginning of the string
                     mstore8(add(ptr, minus), 0x30)
-                    // put the dot
                     mstore8(add(ptr, add(0x01, minus)), 0x2e)
-                    // put zeros after the dot before the significant numbers
+
+                    // put zeros after the dot before significant digits
                     for {
                         // position of the pointer after the dot
                         let i := add(0x02, minus)
-                        // the difference to the numbers
-                        let cc := sub(dot, sub(len, minus))
+                        // the difference
+                        let cc := sub(dot, len)
                         // string length update including zero, dot and zeros after the dot
                         len := add(len, add(0x01, cc))
                     } gt(cc, 0x00) {
@@ -91,7 +167,11 @@ library FixPointLib {
                     }
                 }
 
-                // put numbers to string
+                // if int256 number is negative - minus is already written in the `result`
+                // and the string length is increased by 1
+                len := add(len, minus)
+
+                // put significant numbers to the `result`
                 for {
                     let lenLoop := len
                     let dotPosition := sub(lenLoop, dot)
@@ -99,13 +179,12 @@ library FixPointLib {
                     lenLoop := sub(lenLoop, 0x01)
                     convertValue := div(convertValue, 0x0a)
                 } {
-                    // put a dot if there is an integer part
+                    // put a dot if reach an integer part
                     if eq(dotPosition, lenLoop) {
                         mstore8(add(ptr, lenLoop), 0x2e)
                         lenLoop := sub(lenLoop, 0x01)
                     }
 
-                    // write down the value of each tenth of a number one by one
                     mstore8(
                         add(ptr, lenLoop),
                         add(mod(convertValue, 0x0a), 0x30)
@@ -125,7 +204,7 @@ library FixPointLib {
                         len := sub(len, 0x01)
                         lenLoop := sub(lenLoop, 0x01)
                     }
-                    // if dot, same then break loop
+                    // if a dot, reduce the length of the string and break the loop
                     case 0x2e {
                         len := sub(len, 0x01)
                         break
@@ -136,16 +215,26 @@ library FixPointLib {
                     }
                 }
 
-                // increase the length value by 1, so that the whole string is returned as a result
+                // increase the length value by 1, so that the whole string is returned
                 len := add(len, 0x01)
-                // write the correct length value
+                // write the length to memory
                 mstore(result, len)
-
+                // write the position of free memory after string
                 mstore(0x40, add(ptr, len))
             }
         }
     }
 
+    /**
+     * @notice convert string to uint number, considering the dot
+     *
+     * @dev
+     * - max safe strings:
+     *      "1.15792089237316195423570985008687907853269984665640564039457584007913129639935"
+     *   or
+     *      "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+     * - The `dot` value MUST be less than 78
+     */
     function stringToUint(
         string memory str,
         uint256 dot
@@ -154,24 +243,48 @@ library FixPointLib {
     }
 
     /**
-     * @notice convert string to uint number, considering the dot
+     * @notice convert string to int number, considering the dot and sign
      *
      * @dev
-     * - min safe string:
-     *      "1.15792089237316195423570985008687907853269984665640564039457584007913129639935"
-     * - max safe string:
-     *      "115792089237316195423570985008687907853269984665640564039457584007913129639935"
-     * - revert if interger part of number > (77 - dotPosition)
+     * - the maximum safe strings:
+     *      "5.7896044618658097711785492504343953926634992332820282019728792003956564819967"
+     *   or
+     *      "57896044618658097711785492504343953926634992332820282019728792003956564819967"
+     * - the minimum safe strings:
+     *      "-5.7896044618658097711785492504343953926634992332820282019728792003956564819968"
+     *   or
+     *      "-57896044618658097711785492504343953926634992332820282019728792003956564819968"
+     * - The `dot` value MUST be less than 77
      */
+    function stringToInt(
+        string memory str,
+        uint256 dot
+    ) internal pure returns (int256 result) {
+        // 0b10
+        uint toInt = 2;
+        assembly {
+            if eq(and(mload(add(str, 0x01)), 0xff), 0x2d) {
+                // 0b11
+                toInt := add(toInt, 0x01)
+            }
+        }
+
+        result = int(_convertFromString(str, dot, toInt));
+    }
+
     function _convertFromString(
         string memory str,
         uint256 dot,
         uint toInt
     ) private pure returns (uint256 result) {
         assembly {
+            // the result have a minus
             let minus := and(toInt, 0x01)
+            // `to int` or `to uint`
             toInt := shr(0x01, toInt)
 
+            // toUint: point MUST be less than or equal to 77
+            // toInt: point MUST be less than or equal to 76
             if gt(dot, sub(0x4d, toInt)) {
                 // 0xbfb6d3c2 == bytes4(keccak256("UnsafeDotPosition(uint256)"))
                 mstore(0x00, 0xbfb6d3c2)
@@ -180,7 +293,8 @@ library FixPointLib {
                 revert(0x1c, 0x24)
             }
 
-            // length for the pointer (-1 because the length is stored from 1 to N, and we need 0 to N-1)
+            // length for the pointer
+            // -1 because the length is stored from 1 to N, and we need 0 to N-1
             let strLen := sub(mload(str), add(0x01, minus))
             // so that in all loops each iteration does not execute shr(0xf8, value)
             let ptr := add(str, add(0x01, minus))
@@ -264,7 +378,8 @@ library FixPointLib {
                 revert(0x1c, 0x44)
             }
 
-            // if interger part of number gt 78 - dotPosition -> revert
+            // toUint: if interger part of number gt 78 - dotPosition -> revert
+            // toInt: if interger part of number gt 77 - dotPosition -> revert
             if gt(
                 sub(lengthHelper, counter),
                 sub(add(sub(0x4e, toInt), dotExists), dot)
@@ -280,10 +395,12 @@ library FixPointLib {
                 multiplier := exp(0x0a, sub(dot, counter))
             }
 
+            // overflowValueCheckers
             let overflowHelper
             let lastDigit
 
-            // if the length for the pointer is immediately 0, it won't get into the loop, so we have to calc a single value
+            // if the length for the pointer is immediately 0,
+            // it won't get into the loop, so we have to calc a single value
             if iszero(strLen) {
                 lastDigit := sub(and(mload(ptr), 0xff), 0x30)
 
@@ -337,11 +454,28 @@ library FixPointLib {
                 multiplier := 0x00
             }
 
-            let overflow := or(
-                iszero(eq(multiplier, div(overflowHelper, lastDigit))),
-                lt(result, overflowHelper)
-            )
+            let overflow
 
+            // the check for overflow depends on the type to which the conversion is made
+            switch toInt
+            case 0x00 {
+                // toUint: check for multiplication overflow and addition overflow
+                overflow := or(
+                    iszero(eq(multiplier, div(overflowHelper, lastDigit))),
+                    lt(result, overflowHelper)
+                )
+            }
+            default {
+                // toInt: check that `result' is greater than type(int256).max
+                overflow := gt(
+                    result,
+                    0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+                )
+            }
+
+            // depending on the presence of the sign rounded values in the overflow
+            // toUint: to type(uint256).max
+            // toInt: to type(int256).max or type(int256).min
             switch minus
             case 0x00 {
                 if overflow {
@@ -355,6 +489,7 @@ library FixPointLib {
                 }
             }
             default {
+                // convert uint `result` to int `result` with minus
                 result := not(sub(result, 0x01))
 
                 if overflow {
@@ -362,87 +497,5 @@ library FixPointLib {
                 }
             }
         }
-    }
-
-    /**
-     * @notice unsafe convert decimal int number to string
-     * @dev
-     * - the `dot` can have any value
-     */
-    function intToStringUnsafe(
-        int256 convertValue,
-        uint256 dot
-    ) internal pure returns (string memory result) {
-        result = _intToString(convertValue, dot);
-    }
-
-    /**
-     * @notice convert decimal int number to string
-     * @dev
-     * - max length of the returned string - 79 symbols (include dot and sign)
-     * - max int value - type(int256).max
-     * - min int value - type(int256).min
-     * - dot value MUST be less than 77
-     */
-    function intToString(
-        int256 convertValue,
-        uint256 dot
-    ) internal pure returns (string memory result) {
-        assembly {
-            if gt(dot, 0x4c) {
-                // 0xbfb6d3c2 == bytes4(keccak256("UnsafeDotPosition(uint256)"))
-                mstore(0x00, 0xbfb6d3c2)
-                mstore(0x20, dot)
-
-                revert(0x1c, 0x24)
-            }
-        }
-
-        result = _intToString(convertValue, dot);
-    }
-
-    function _intToString(
-        int256 convertValue,
-        uint256 dot
-    ) private pure returns (string memory result) {
-        uint value;
-        uint minus;
-        assembly {
-            // check for sign
-            if shr(0xff, convertValue) {
-                convertValue := add(not(convertValue), 0x01)
-                // len := 0x01
-
-                mstore8(add(result, 0x20), 0x2d) // "-"
-                minus := 0x01
-            }
-            value := convertValue
-        }
-
-        result = _uintToString(value, dot, minus);
-    }
-
-    /**
-     * @notice convert string to int, considering the dot
-     *
-     * @dev
-     * - max length of string - 78 symbols
-     * - max int value - type(int256).max
-     * - revert if interger part of number > (76 - dotPosition)
-     */
-    function stringToInt(
-        string memory str,
-        uint256 dot
-    ) internal pure returns (int256 result) {
-        // 0b10
-        uint toInt = 2;
-        assembly {
-            if eq(and(mload(add(str, 0x01)), 0xff), 0x2d) {
-                // 0b11
-                toInt := add(toInt, 0x01)
-            }
-        }
-
-        result = int(_convertFromString(str, dot, toInt));
     }
 }
