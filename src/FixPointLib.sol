@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /// @title FixPointLib
 /// @author ElawBek
-/// @notice Library for converting numbers from uint/int to string and vice versa
+/// @notice Library for converting uint/int numbers to string and vice versa
 library FixPointLib {
     error UnsafeDotPosition(uint256 dot);
     error IncorrectStringLength(uint256 length, bool dotExists);
