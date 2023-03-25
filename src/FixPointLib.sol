@@ -17,7 +17,7 @@ library FixPointLib {
         uint256 convertValue,
         uint256 dot
     ) internal pure returns (string memory result) {
-        result = _uintToString(convertValue, dot, 0);
+        result = _convertToString(convertValue, dot, 0);
     }
 
     /**
@@ -44,7 +44,7 @@ library FixPointLib {
             }
         }
 
-        result = _uintToString(convertValue, dot, 0);
+        result = _convertToString(convertValue, dot, 0);
     }
 
     /**
@@ -109,10 +109,10 @@ library FixPointLib {
             value := convertValue
         }
 
-        result = _uintToString(value, dot, minus);
+        result = _convertToString(value, dot, minus);
     }
 
-    function _uintToString(
+    function _convertToString(
         uint256 convertValue,
         uint256 dot,
         uint256 minus
@@ -220,7 +220,7 @@ library FixPointLib {
                 // write the length to memory
                 mstore(result, len)
                 // write the position of free memory after string
-                mstore(0x40, add(ptr, len))
+                mstore(0x40, add(ptr, and(add(add(len, 32), 31), not(31))))
             }
         }
     }
